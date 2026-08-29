@@ -1,0 +1,144 @@
+name: Build MAX35 STELLAR Consumer V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'overlay/**'
+      - 'scripts/**'
+      - '.github/workflows/build-max35.yml'
+      - 'VERSION'
+
+permissions:
+  contents: read
+
+env:
+  SPOTPEAR_DRIVE_ID: 1WIrLLpS7OxHll7KD5v6kePZM50hAtzlf
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: espressif/idf:v5.5
+
+    steps:
+      - name: Checkout product overlay
+        uses: actions/checkout@v5
+        with:
+          path: product
+
+      - name: Prepare ESP-IDF Python environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+          python -m pip install --disable-pip-version-check --no-cache-dir --upgrade gdown
+
+      - name: Download SpotPear Xiaozhi source
+        shell: bash
+        env:
+          CUSTOM_SOURCE_URL: ${{ secrets.XIAOZHI_SOURCE_URL }}
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+
+          rm -rf work/vendor work/xiaozhi
+          mkdir -p work/vendor
+
+          if [ -n "${CUSTOM_SOURCE_URL:-}" ]; then
+            curl -L --fail --retry 3 --retry-delay 2 \
+              "$CUSTOM_SOURCE_URL" \
+              -o /tmp/xiaozhi-source.zip
+          else
+            python -m gdown \
+              "${SPOTPEAR_DRIVE_ID}" \
+              -O /tmp/xiaozhi-source.zip
+          fi
+
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          p = Path("/tmp/xiaozhi-source.zip")
+          if not p.exists() or p.stat().st_size < 10000:
+              raise SystemExit("SpotPear source package download failed or is too small")
+          if not zipfile.is_zipfile(p):
+              raise SystemExit("SpotPear source package is not a valid ZIP")
+          print("ZIP validation: OK")
+          PY
+
+          unzip -q /tmp/xiaozhi-source.zip -d work/vendor
+          SOURCE_ROOT="$(python product/scripts/find_source_root.py work/vendor)"
+          echo "Detected source root: $SOURCE_ROOT"
+
+          mkdir -p work/xiaozhi
+          cp -a "$SOURCE_ROOT/." work/xiaozhi/
+
+      - name: Configure exact MAX35 board
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+          python product/scripts/configure_max35.py work/xiaozhi
+
+      - name: Apply STELLAR MAX35 product UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+          python product/scripts/apply_mods.py work/xiaozhi
+
+      - name: Verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+          python product/scripts/preflight.py work/xiaozhi
+
+      - name: Build firmware
+        shell: bash
+        working-directory: work/xiaozhi
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32s3
+          idf.py build
+
+      - name: Package flashable BIN
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+
+          VERSION="$(cat product/VERSION | tr -d '\r\n')"
+          mkdir -p product/dist/components
+
+          python product/scripts/package_firmware.py \
+            work/xiaozhi/build \
+            "product/dist/MAX35_STELLAR_${VERSION}_merged.bin"
+
+          find work/xiaozhi/build -maxdepth 1 -type f -name '*.bin' \
+            -exec cp -f {} product/dist/components/ \;
+
+          [ ! -f work/xiaozhi/build/bootloader/bootloader.bin ] || \
+            cp -f work/xiaozhi/build/bootloader/bootloader.bin product/dist/components/
+
+          [ ! -f work/xiaozhi/build/partition_table/partition-table.bin ] || \
+            cp -f work/xiaozhi/build/partition_table/partition-table.bin product/dist/components/
+
+          [ ! -f work/xiaozhi/build/ota_data_initial.bin ] || \
+            cp -f work/xiaozhi/build/ota_data_initial.bin product/dist/components/
+
+          (
+            cd product/dist
+            sha256sum *.bin components/*.bin > SHA256SUMS.txt
+          )
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX35-STELLAR-Consumer-Firmware
+          path: product/dist/
+          if-no-files-found: error
+          retention-days: 30
