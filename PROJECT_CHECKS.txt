@@ -1,0 +1,12 @@
+MAX35 STELLAR Consumer V1 - package checks
+
+[PASS] Python patch/config/package scripts syntax
+[PASS] GitHub Actions YAML parse
+[PASS] Synthetic MAX35 board/Kconfig selection
+[PASS] Preserve CustomLcdDisplay subclass and inherited constructor
+[PASS] Camera touch-consent patch insertion
+[PASS] Product MCP registration
+[PASS] Preflight validation
+[PASS] Home/Chat/Camera are separate replaceable .cc files
+
+Full SpotPear vendor-source build: delegated to GitHub Actions (ESP-IDF 5.5).

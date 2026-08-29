@@ -1,0 +1,12 @@
+后续只改某一个界面时：
+
+桌面：只替换 overlay/main/display/stellar_max35/ui_home.cc
+对话：只替换 overlay/main/display/stellar_max35/ui_chat.cc
+拍照搜题：只替换 overlay/main/display/stellar_max35/ui_camera.cc
+
+只要 ui_pages.h 里的函数签名不变，就不要修改 stellar_max35_display.cc。
+角色图片如需替换：
+1. 替换 assets/character_source.png
+2. 运行 scripts/image_to_lvgl_rgb565.py（README/脚本帮助中有参数）重新生成 ui_character.c
+
+这样可以把“视觉换皮”和“小智状态机 / MAX35 硬件层”彻底分开。

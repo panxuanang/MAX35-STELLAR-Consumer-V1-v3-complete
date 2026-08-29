@@ -1,0 +1,9 @@
+上传 GitHub 后：
+1. 确认 .github/workflows/build-max35.yml 存在。
+2. 打开 Actions。
+3. 运行 Build MAX35 STELLAR Consumer V1。
+4. 成功后下载 MAX35-STELLAR-Consumer-Firmware。
+5. 使用其中 MAX35_STELLAR_*_merged.bin。
+
+若下载 SpotPear 源码失败：设置 Actions Secret XIAOZHI_SOURCE_URL。
+若自动识别板目录错误：根据日志设置 Actions Variable MAX35_BOARD_DIR。
